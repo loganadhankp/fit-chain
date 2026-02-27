@@ -1,0 +1,249 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ----- Users -----
+model User {
+  id                  String   @id @default(uuid()) @db.Uuid
+  email               String   @unique @db.VarChar(255)
+  passwordHash        String   @map("password_hash") @db.VarChar(255)
+  walletAddress       String?  @unique @map("wallet_address") @db.VarChar(42)
+  firstNameEncrypted  String?  @map("first_name_encrypted")
+  lastNameEncrypted   String?  @map("last_name_encrypted")
+  dateOfBirth         DateTime? @map("date_of_birth") @db.Date
+  encryptionIv        String?  @map("encryption_iv")
+  encryptionAuthTag   String?  @map("encryption_auth_tag")
+  role                String   @default("user") @db.VarChar(20) // user, admin
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  healthMetrics        HealthMetric[]
+  healthScores         HealthScore[]
+  wearableConnections  WearableConnection[]
+  insurancePolicies    InsurancePolicy[]
+  auditLogs            AuditLog[]
+  healthQuestionnaires HealthQuestionnaire[]
+
+  @@map("users")
+}
+
+// ----- Vendors (Insurance Providers) -----
+model Vendor {
+  id              String   @id @default(uuid()) @db.Uuid
+  companyName     String   @map("company_name") @db.VarChar(255)
+  email           String   @unique @db.VarChar(255)
+  passwordHash    String   @map("password_hash") @db.VarChar(255)
+  walletAddress   String?  @unique @map("wallet_address") @db.VarChar(42)
+  licenseNumber   String?  @map("license_number") @db.VarChar(100)
+  description     String?
+  logoUrl         String?  @map("logo_url") @db.VarChar(500)
+  isVerified      Boolean  @default(false) @map("is_verified")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  policyTemplates  PolicyTemplate[]
+  insurancePolicies InsurancePolicy[]
+
+  @@map("vendors")
+}
+
+// ----- Policy Templates (plans vendors offer) -----
+model PolicyTemplate {
+  id                    String   @id @default(uuid()) @db.Uuid
+  vendorId              String   @map("vendor_id") @db.Uuid
+  planName              String   @map("plan_name") @db.VarChar(200)
+  description           String?
+  basePremium           Decimal  @map("base_premium") @db.Decimal(10, 2)
+  coverageAmount        Decimal  @map("coverage_amount") @db.Decimal(12, 2)
+  coverageTier          Int      @default(1) @map("coverage_tier") // 1=Bronze,2=Silver,3=Gold,4=Platinum
+  policyType            String   @default("health") @map("policy_type") @db.VarChar(50)
+  minHealthScore        Int      @default(0) @map("min_health_score") // eligibility gate
+  maxDiscountPercentage Int      @default(20) @map("max_discount_percentage")
+  durationMonths        Int      @default(12) @map("duration_months")
+  isActive              Boolean  @default(true) @map("is_active")
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+
+  vendor            Vendor            @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  insurancePolicies InsurancePolicy[]
+
+  @@index([vendorId])
+  @@map("policy_templates")
+}
+
+// ----- Health Questionnaire (initial assessment) -----
+model HealthQuestionnaire {
+  id                    String   @id @default(uuid()) @db.Uuid
+  userId                String   @map("user_id") @db.Uuid
+  heightCm              Decimal? @map("height_cm") @db.Decimal(5, 1)
+  weightKg              Decimal? @map("weight_kg") @db.Decimal(5, 1)
+  bmi                   Decimal? @db.Decimal(4, 1)
+  smoker                Boolean  @default(false)
+  alcoholFrequency      String?  @map("alcohol_frequency") @db.VarChar(20) // never, occasional, regular
+  exerciseFrequency     String?  @map("exercise_frequency") @db.VarChar(20) // sedentary, light, moderate, active
+  preExistingConditions Json?    @default("[]") @map("pre_existing_conditions")
+  familyHistory         Json?    @default("[]") @map("family_history")
+  medications           Json?    @default("[]")
+  submittedAt           DateTime @default(now()) @map("submitted_at")
+
+  user              User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  insurancePolicies InsurancePolicy[]
+
+  @@index([userId])
+  @@map("health_questionnaires")
+}
+
+// ----- Health Metrics (raw data from wearables) -----
+model HealthMetric {
+  id               String   @id @default(uuid()) @db.Uuid
+  userId           String   @map("user_id") @db.Uuid
+  metricDate       DateTime @map("metric_date") @db.Date
+  steps            Int?     @default(0)
+  activeMinutes    Int?     @default(0) @map("active_minutes")
+  distanceKm       Decimal? @default(0) @map("distance_km") @db.Decimal(10, 2)
+  caloriesBurned   Int?     @default(0) @map("calories_burned")
+  sleepHours       Decimal? @default(0) @map("sleep_hours") @db.Decimal(4, 2)
+  restingHeartRate Int?     @map("resting_heart_rate")
+  weightKg         Decimal? @map("weight_kg") @db.Decimal(5, 2)
+  dataSource       String?  @map("data_source") @db.VarChar(50)
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, metricDate])
+  @@index([userId, metricDate(sort: Desc)])
+  @@map("health_metrics")
+}
+
+// ----- Health Scores (computed) -----
+model HealthScore {
+  id                  String   @id @default(uuid()) @db.Uuid
+  userId              String   @map("user_id") @db.Uuid
+  scoreDate           DateTime @map("score_date") @db.Date
+  overallScore        Int      @map("overall_score")
+  stepsScore          Int?     @map("steps_score")
+  activityScore       Int?     @map("activity_score")
+  sleepScore          Int?     @map("sleep_score")
+  heartScore          Int?     @map("heart_score")
+  trend               String?  @db.VarChar(20) // improving, stable, declining
+  syncedToBlockchain  Boolean  @default(false) @map("synced_to_blockchain")
+  blockchainTxHash    String?  @map("blockchain_tx_hash") @db.VarChar(66)
+  aiRiskScore         Int?     @map("ai_risk_score")                        // 0-100 from ML model
+  aiRiskCategory      String?  @map("ai_risk_category") @db.VarChar(20)    // low, moderate, high
+  aiConfidence        Decimal? @map("ai_confidence") @db.Decimal(5, 4)     // model confidence 0-1
+  createdAt           DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, scoreDate])
+  @@index([userId, scoreDate(sort: Desc)])
+  @@map("health_scores")
+}
+
+// ----- Wearable Connections -----
+model WearableConnection {
+  id                    String   @id @default(uuid()) @db.Uuid
+  userId                String   @map("user_id") @db.Uuid
+  provider              String   @db.VarChar(50) // fitbit, google_fit
+  accessTokenEncrypted  String   @map("access_token_encrypted")
+  refreshTokenEncrypted String   @map("refresh_token_encrypted")
+  tokenExpiresAt        DateTime? @map("token_expires_at")
+  encryptionIv          String?  @map("encryption_iv")
+  encryptionAuthTag     String?  @map("encryption_auth_tag")
+  lastSyncAt            DateTime? @map("last_sync_at")
+  isActive              Boolean  @default(true) @map("is_active")
+  createdAt             DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, provider])
+  @@map("wearable_connections")
+}
+
+// ----- Insurance Policies -----
+model InsurancePolicy {
+  id                 String   @id @default(uuid()) @db.Uuid
+  userId             String   @map("user_id") @db.Uuid
+  vendorId           String?  @map("vendor_id") @db.Uuid
+  templateId         String?  @map("template_id") @db.Uuid
+  questionnaireId    String?  @map("questionnaire_id") @db.Uuid
+  policyNumber       String   @unique @map("policy_number") @db.VarChar(50)
+  tokenId            Int?     @unique @map("token_id")
+  basePremium        Decimal  @map("base_premium") @db.Decimal(10, 2)
+  coverageAmount     Decimal  @map("coverage_amount") @db.Decimal(12, 2)
+  coverageTier       Int      @default(1) @map("coverage_tier") // 1-4
+  policyType         String   @default("health") @map("policy_type") @db.VarChar(50)
+  startDate          DateTime @map("start_date") @db.Date
+  endDate            DateTime? @map("end_date") @db.Date
+  status             String   @default("pending_review") @db.VarChar(30) // pending_review, approved, active, paused, cancelled, rejected
+  initialHealthScore Int?     @map("initial_health_score")
+  vendorNotes        String?  @map("vendor_notes")
+  rejectionReason    String?  @map("rejection_reason")
+  reviewedAt         DateTime? @map("reviewed_at")
+  blockchainTxHash   String?  @map("blockchain_tx_hash") @db.VarChar(66)
+  ipfsHash           String?  @map("ipfs_hash") @db.VarChar(100)
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  user          User                 @relation(fields: [userId], references: [id])
+  vendor        Vendor?              @relation(fields: [vendorId], references: [id])
+  template      PolicyTemplate?      @relation(fields: [templateId], references: [id])
+  questionnaire HealthQuestionnaire? @relation(fields: [questionnaireId], references: [id])
+  policyUpdates PolicyUpdate[]
+
+  @@index([userId])
+  @@index([vendorId])
+  @@index([templateId])
+  @@index([tokenId])
+  @@map("insurance_policies")
+}
+
+// ----- Policy Updates History -----
+model PolicyUpdate {
+  id                 String   @id @default(uuid()) @db.Uuid
+  policyId           String   @map("policy_id") @db.Uuid
+  healthScore        Int      @map("health_score")
+  discountPercentage Decimal  @map("discount_percentage") @db.Decimal(5, 2)
+  newPremium         Decimal  @map("new_premium") @db.Decimal(10, 2)
+  coverageTier       Int      @map("coverage_tier")
+  oracleTxHash       String?  @map("oracle_tx_hash") @db.VarChar(66)
+  updatedAt          DateTime @default(now()) @map("updated_at")
+
+  policy InsurancePolicy @relation(fields: [policyId], references: [id], onDelete: Cascade)
+
+  @@map("policy_updates")
+}
+
+// ----- Audit Logs -----
+model AuditLog {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String?  @map("user_id") @db.Uuid
+  action    String   @db.VarChar(50)
+  resource  String   @db.VarChar(255)
+  ipAddress String?  @map("ip_address") @db.VarChar(45)
+  details   String?
+  success   Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@map("audit_logs")
+}
+
+// ----- Oracle Logs -----
+model OracleLog {
+  id           String   @id @default(uuid()) @db.Uuid
+  policyId     String?  @map("policy_id") @db.Uuid
+  status       String   @db.VarChar(20) // success, error
+  errorMessage String?  @map("error_message")
+  txHash       String?  @map("tx_hash") @db.VarChar(66)
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@map("oracle_logs")
+}
+

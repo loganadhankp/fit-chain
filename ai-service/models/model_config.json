@@ -1,0 +1,24 @@
+{
+  "feature_columns": [
+    "age",
+    "gender",
+    "bmi",
+    "smoker",
+    "alcohol_frequency",
+    "exercise_frequency",
+    "pre_existing_conditions_count",
+    "family_history_count",
+    "steps",
+    "active_minutes",
+    "sleep_hours",
+    "resting_heart_rate",
+    "calories_burned",
+    "distance_km"
+  ],
+  "categorical_columns": [
+    "gender",
+    "alcohol_frequency",
+    "exercise_frequency"
+  ],
+  "target_column": "health_risk_score"
+}

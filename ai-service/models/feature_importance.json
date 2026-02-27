@@ -1,0 +1,16 @@
+{
+  "smoker": 0.5474154949188232,
+  "active_minutes": 0.1044093668460846,
+  "exercise_frequency": 0.06271572411060333,
+  "calories_burned": 0.0546836256980896,
+  "steps": 0.04358208552002907,
+  "pre_existing_conditions_count": 0.04235869646072388,
+  "alcohol_frequency": 0.03788427636027336,
+  "bmi": 0.032069653272628784,
+  "resting_heart_rate": 0.02252490073442459,
+  "sleep_hours": 0.02203975059092045,
+  "family_history_count": 0.013370485976338387,
+  "distance_km": 0.010346533730626106,
+  "age": 0.0054595316760241985,
+  "gender": 0.0011398366186767817
+}

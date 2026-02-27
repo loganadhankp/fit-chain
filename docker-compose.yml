@@ -1,0 +1,87 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: healthchain-postgres
+    environment:
+      POSTGRES_DB: healthchain
+      POSTGRES_USER: healthchain
+      POSTGRES_PASSWORD: healthchain_dev_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U healthchain"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: healthchain-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ----- Application services (uncomment when ready to run in Docker) -----
+  # backend:
+  #   build: ./backend
+  #   container_name: healthchain-backend
+  #   env_file: .env
+  #   environment:
+  #     DATABASE_URL: postgresql://healthchain:healthchain_dev_password@postgres:5432/healthchain
+  #     REDIS_URL: redis://redis:6379
+  #   ports:
+  #     - "3001:3001"
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_healthy
+
+  # frontend:
+  #   build: ./frontend
+  #   container_name: healthchain-frontend
+  #   environment:
+  #     NEXT_PUBLIC_API_URL: http://localhost:3001/api
+  #   ports:
+  #     - "3000:3000"
+  #   depends_on:
+  #     - backend
+
+  # oracle:
+  #   build: ./oracle-service
+  #   container_name: healthchain-oracle
+  #   env_file: .env
+  #   environment:
+  #     DATABASE_URL: postgresql://healthchain:healthchain_dev_password@postgres:5432/healthchain
+  #   ports:
+  #     - "3002:3002"
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+
+  ai-service:
+    build: ./ai-service
+    container_name: healthchain-ai
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./ai-service/models:/app/models
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  postgres_data:
+  redis_data:

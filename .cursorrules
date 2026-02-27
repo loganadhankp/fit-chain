@@ -1,0 +1,1569 @@
+# Complete Master Prompt for Dynamic NFT Health Insurance Project
+
+## Project Context & Role Definition
+
+You are an expert full-stack blockchain developer and solution architect working on a final year university project. This project is a production-grade dynamic NFT-based health insurance system that integrates real-time wearable device data to create a personalized, incentive-based insurance model.
+
+## Core Project Overview
+
+### Project Name
+HealthChain - Dynamic NFT Health Insurance Platform
+
+### Problem Statement
+Traditional health insurance models have fixed premiums that don't account for real-time healthy behaviors. This creates no incentive for policyholders to maintain healthy lifestyles. HealthChain solves this by:
+- Storing health insurance policies as dynamic NFTs on blockchain
+- Integrating with wearable devices (Fitbit, Apple Watch, Google Fit) for real-time health metrics
+- Automatically updating insurance policy terms based on verified health data
+- Providing premium discounts for maintaining healthy behaviors
+- Creating transparency and immutability in insurance records
+
+### Key Innovation
+NFT metadata dynamically updates based on oracle-verified health data from wearables, creating the first "living insurance policy" that rewards healthy behavior in real-time.
+
+## Complete Technology Stack
+
+### Blockchain Layer
+- **Network**: Polygon (for low gas fees) or Ethereum Sepolia testnet
+- **Smart Contracts**: Solidity ^0.8.20
+- **Development Framework**: Hardhat
+- **Standards**: ERC-721 (NFT standard), OpenZeppelin contracts
+- **Oracle**: Chainlink (or custom oracle solution)
+- **IPFS**: For storing policy documents and NFT metadata
+
+### Backend
+- **Runtime**: Node.js 18+ with Express.js
+- **Alternative**: Python 3.10+ with FastAPI
+- **Database**: PostgreSQL (relational data) + Redis (caching)
+- **ORM**: Prisma (Node.js) or SQLAlchemy (Python)
+- **Authentication**: JWT tokens + OAuth 2.0 for wearables
+- **Blockchain Interaction**: ethers.js v6
+- **API Documentation**: Swagger/OpenAPI
+- **Job Scheduler**: node-cron or Bull Queue
+
+### Frontend
+- **Framework**: Next.js 14 (App Router) with TypeScript
+- **Styling**: Tailwind CSS + shadcn/ui components
+- **State Management**: Zustand or React Context
+- **Web3 Integration**: wagmi + viem (or web3modal)
+- **Charts**: Recharts or Chart.js
+- **HTTP Client**: Axios with React Query (TanStack Query)
+
+### Wearable Integrations
+- **Fitbit API**: OAuth 2.0, RESTful endpoints
+- **Apple HealthKit**: iOS app integration (optional)
+- **Google Fit API**: OAuth 2.0, RESTful endpoints
+- **Data Sync**: Webhook listeners + polling fallback
+
+### DevOps & Infrastructure
+- **Version Control**: Git + GitHub
+- **Containerization**: Docker + Docker Compose
+- **CI/CD**: GitHub Actions
+- **Hosting**: 
+  - Frontend: Vercel
+  - Backend: Railway, Render, or DigitalOcean
+  - Smart Contracts: Polygon/Ethereum networks
+- **Monitoring**: Sentry (error tracking), LogRocket (user sessions)
+
+## System Architecture
+
+### High-Level Component Interaction
+
+```
+[Wearable Devices] 
+    ↓ (OAuth + REST API)
+[Wearable APIs (Fitbit/Google Fit)]
+    ↓ (Data Sync)
+[Backend API Server]
+    ↓ (Health Score Calculation)
+[PostgreSQL Database] + [Redis Cache]
+    ↓ (Oracle Service reads data)
+[Chainlink Oracle / Custom Oracle]
+    ↓ (Blockchain Transaction)
+[Smart Contract (Dynamic NFT)]
+    ↓ (Read NFT State)
+[Frontend Dashboard]
+    ↓ (User Interaction)
+[MetaMask Wallet]
+```
+
+### Data Flow
+
+1. **Data Collection**: User authorizes wearable device → Backend fetches health metrics daily
+2. **Processing**: Backend calculates health score from raw metrics
+3. **Storage**: Encrypted health data stored in PostgreSQL, aggregated scores in Redis
+4. **Oracle Update**: Scheduled job reads scores → Oracle submits to blockchain
+5. **NFT Update**: Smart contract updates metadata (health score, premium discount, tier)
+6. **Frontend Display**: User sees updated policy details via Web3 calls
+
+## Detailed Component Specifications
+
+### 1. Smart Contracts Architecture
+
+#### Contract: HealthInsuranceNFT.sol
+
+**Purpose**: ERC-721 NFT representing a health insurance policy with dynamic metadata
+
+**State Variables**:
+```solidity
+struct PolicyData {
+    uint256 policyId;
+    address policyHolder;
+    uint256 basePremium; // in wei
+    uint256 healthScore; // 0-100
+    uint256 discountPercentage; // 0-20 (representing 0-20%)
+    uint256 coverageTier; // 1=Bronze, 2=Silver, 3=Gold, 4=Platinum
+    uint256 lastUpdated;
+    bool isActive;
+    string ipfsMetadataHash; // Full policy document
+}
+
+mapping(uint256 => PolicyData) public policies;
+mapping(address => bool) public authorizedOracles;
+mapping(address => uint256[]) public userPolicies;
+```
+
+**Key Functions**:
+- `mintPolicy(address _to, uint256 _basePremium, string memory _ipfsHash)`: Mint new policy NFT
+- `updateHealthScore(uint256 _tokenId, uint256 _newScore)`: Oracle-only function to update health score
+- `calculateDiscount(uint256 _healthScore)`: Pure function returning discount percentage
+- `upgradeTier(uint256 _tokenId)`: Automatic tier upgrade based on health score
+- `getCurrentPremium(uint256 _tokenId)`: View function returning discounted premium
+- `pausePolicy(uint256 _tokenId)`: Emergency pause for specific policy
+- `revokePolicy(uint256 _tokenId)`: Cancel policy and burn NFT
+
+**Access Control**:
+- Owner: Can add/remove oracles, pause contract, set base parameters
+- Oracle: Can update health scores
+- PolicyHolder: Can view own data, transfer NFT (policy transfer)
+
+**Events**:
+```solidity
+event PolicyMinted(uint256 indexed tokenId, address indexed holder, uint256 basePremium);
+event HealthScoreUpdated(uint256 indexed tokenId, uint256 oldScore, uint256 newScore);
+event PremiumUpdated(uint256 indexed tokenId, uint256 newPremium, uint256 discountPercentage);
+event TierUpgraded(uint256 indexed tokenId, uint256 newTier);
+event PolicyPaused(uint256 indexed tokenId);
+event PolicyRevoked(uint256 indexed tokenId);
+```
+
+**Security Features**:
+- Reentrancy guards on state-changing functions
+- Rate limiting on oracle updates (max once per 24 hours per policy)
+- Emergency pause mechanism
+- Checks-Effects-Interactions pattern
+- Input validation on all external functions
+
+#### Contract: HealthOracle.sol
+
+**Purpose**: Decentralized oracle to feed health data to NFT contract
+
+**Key Functions**:
+- `requestHealthUpdate(uint256 _policyId)`: Request health data update
+- `fulfillHealthUpdate(uint256 _policyId, uint256 _healthScore, bytes memory _signature)`: Callback with verified data
+- `addDataSource(address _source)`: Whitelist backend API endpoints
+- `verifySignature(bytes32 _messageHash, bytes memory _signature)`: Verify data authenticity
+
+**Data Verification**:
+- Multi-signature requirement (2-of-3 oracle nodes)
+- Data source whitelisting
+- Timestamp verification (data freshness)
+- Outlier detection (reject impossible values)
+
+### 2. Backend API Specifications
+
+#### Architecture Pattern
+**Layered Architecture**:
+- Routes → Controllers → Services → Repositories → Database
+- Middleware: Authentication, Validation, Error Handling, Logging
+
+#### Core Modules
+
+**Module 1: Authentication & User Management**
+
+**Endpoints**:
+```
+POST   /api/auth/register          - Register new user
+POST   /api/auth/login             - Login with email/password
+POST   /api/auth/logout            - Logout and invalidate token
+GET    /api/auth/me                - Get current user info
+PUT    /api/auth/profile           - Update user profile
+POST   /api/auth/connect-wallet    - Link blockchain wallet
+```
+
+**Database Schema**:
+```sql
+CREATE TABLE users (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    email VARCHAR(255) UNIQUE NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    wallet_address VARCHAR(42) UNIQUE,
+    first_name VARCHAR(100),
+    last_name VARCHAR(100),
+    date_of_birth DATE,
+    gender VARCHAR(20),
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+```
+
+**Module 2: Wearable Integration**
+
+**Endpoints**:
+```
+GET    /api/wearables/auth-url/:provider    - Get OAuth URL for provider
+POST   /api/wearables/callback/:provider    - OAuth callback handler
+GET    /api/wearables/connected             - List connected wearables
+DELETE /api/wearables/:provider             - Disconnect wearable
+POST   /api/wearables/sync/:provider        - Manually trigger data sync
+GET    /api/wearables/status/:provider      - Check connection status
+```
+
+**Database Schema**:
+```sql
+CREATE TABLE wearable_connections (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    provider VARCHAR(50) NOT NULL, -- 'fitbit', 'google_fit', 'apple_health'
+    access_token TEXT NOT NULL, -- Encrypted
+    refresh_token TEXT NOT NULL, -- Encrypted
+    token_expires_at TIMESTAMP,
+    last_sync_at TIMESTAMP,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT NOW(),
+    UNIQUE(user_id, provider)
+);
+```
+
+**Wearable Data Fetching Logic**:
+```typescript
+// Pseudo-code for data sync
+async function syncWearableData(userId: string, provider: string) {
+    // 1. Get valid access token (refresh if expired)
+    const connection = await getWearableConnection(userId, provider);
+    const accessToken = await ensureValidToken(connection);
+    
+    // 2. Fetch data from provider API
+    const healthData = await fetchFromProvider(provider, accessToken, {
+        startDate: connection.last_sync_at || thirtyDaysAgo(),
+        endDate: now()
+    });
+    
+    // 3. Transform and store data
+    const normalized = normalizeHealthData(healthData, provider);
+    await storeHealthMetrics(userId, normalized);
+    
+    // 4. Update last sync timestamp
+    await updateLastSync(connection.id);
+    
+    // 5. Recalculate health score
+    await recalculateHealthScore(userId);
+}
+```
+
+**Module 3: Health Metrics & Scoring**
+
+**Endpoints**:
+```
+GET    /api/health/metrics           - Get user's health metrics (filtered by date)
+GET    /api/health/score             - Get current health score
+GET    /api/health/score/history     - Get health score history
+GET    /api/health/summary           - Get aggregated health summary
+GET    /api/health/trends            - Get trend analysis
+POST   /api/health/goals             - Set health goals
+GET    /api/health/recommendations   - Get personalized recommendations
+```
+
+**Database Schema**:
+```sql
+CREATE TABLE health_metrics (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    metric_date DATE NOT NULL,
+    steps INTEGER DEFAULT 0,
+    active_minutes INTEGER DEFAULT 0,
+    distance_km DECIMAL(10,2) DEFAULT 0,
+    calories_burned INTEGER DEFAULT 0,
+    sleep_hours DECIMAL(4,2) DEFAULT 0,
+    resting_heart_rate INTEGER,
+    weight_kg DECIMAL(5,2),
+    created_at TIMESTAMP DEFAULT NOW(),
+    UNIQUE(user_id, metric_date)
+);
+
+CREATE INDEX idx_health_metrics_user_date ON health_metrics(user_id, metric_date DESC);
+
+CREATE TABLE health_scores (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    score_date DATE NOT NULL,
+    overall_score INTEGER NOT NULL CHECK (overall_score >= 0 AND overall_score <= 100),
+    steps_score INTEGER CHECK (steps_score >= 0 AND steps_score <= 100),
+    activity_score INTEGER CHECK (activity_score >= 0 AND activity_score <= 100),
+    sleep_score INTEGER CHECK (sleep_score >= 0 AND sleep_score <= 100),
+    heart_score INTEGER CHECK (heart_score >= 0 AND heart_score <= 100),
+    trend VARCHAR(20), -- 'improving', 'stable', 'declining'
+    created_at TIMESTAMP DEFAULT NOW(),
+    UNIQUE(user_id, score_date)
+);
+
+CREATE INDEX idx_health_scores_user_date ON health_scores(user_id, score_date DESC);
+```
+
+**Health Score Algorithm**:
+```typescript
+interface HealthScoreWeights {
+    steps: number;        // 0.25
+    activity: number;     // 0.30
+    sleep: number;        // 0.25
+    heartRate: number;    // 0.20
+}
+
+interface UserMetrics {
+    steps: number;
+    activeMinutes: number;
+    sleepHours: number;
+    restingHeartRate: number;
+    age: number;
+}
+
+function calculateHealthScore(metrics: UserMetrics, weights: HealthScoreWeights): number {
+    // 1. Calculate individual metric scores (0-100)
+    const stepsScore = calculateStepsScore(metrics.steps, metrics.age);
+    const activityScore = calculateActivityScore(metrics.activeMinutes, metrics.age);
+    const sleepScore = calculateSleepScore(metrics.sleepHours);
+    const heartScore = calculateHeartRateScore(metrics.restingHeartRate, metrics.age);
+    
+    // 2. Apply weights and calculate overall score
+    const overallScore = 
+        (stepsScore * weights.steps) +
+        (activityScore * weights.activity) +
+        (sleepScore * weights.sleep) +
+        (heartScore * weights.heartRate);
+    
+    // 3. Round to nearest integer
+    return Math.round(overallScore);
+}
+
+// Steps scoring (age-adjusted)
+function calculateStepsScore(steps: number, age: number): number {
+    const target = getStepsTarget(age); // e.g., 10000 for adults, 8000 for seniors
+    const ratio = steps / target;
+    
+    if (ratio >= 1.2) return 100;  // Exceeds target by 20%
+    if (ratio >= 1.0) return 90 + (ratio - 1) * 50; // 90-100
+    if (ratio >= 0.7) return 60 + (ratio - 0.7) * 100; // 60-90
+    if (ratio >= 0.5) return 30 + (ratio - 0.5) * 150; // 30-60
+    return ratio * 60; // 0-30
+}
+
+// Similar functions for activity, sleep, heart rate...
+```
+
+**Module 4: Insurance Policy Management**
+
+**Endpoints**:
+```
+POST   /api/policies/apply           - Apply for new policy
+GET    /api/policies                 - Get user's policies
+GET    /api/policies/:policyId       - Get specific policy details
+POST   /api/policies/:policyId/mint  - Mint policy as NFT (blockchain tx)
+GET    /api/policies/:policyId/premium - Calculate current premium
+GET    /api/policies/:policyId/history - Get policy update history
+POST   /api/policies/:policyId/claim - Submit insurance claim
+```
+
+**Database Schema**:
+```sql
+CREATE TABLE insurance_policies (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    token_id INTEGER UNIQUE, -- NFT token ID (null until minted)
+    policy_number VARCHAR(50) UNIQUE NOT NULL,
+    base_premium DECIMAL(10,2) NOT NULL,
+    coverage_tier INTEGER DEFAULT 1, -- 1-4
+    coverage_amount DECIMAL(12,2) NOT NULL,
+    policy_type VARCHAR(50) NOT NULL, -- 'health', 'life', 'critical_illness'
+    start_date DATE NOT NULL,
+    end_date DATE,
+    status VARCHAR(20) DEFAULT 'pending', -- 'pending', 'active', 'paused', 'cancelled'
+    blockchain_tx_hash VARCHAR(66),
+    ipfs_hash VARCHAR(100), -- Policy document on IPFS
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE policy_updates (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    policy_id UUID REFERENCES insurance_policies(id) ON DELETE CASCADE,
+    health_score INTEGER NOT NULL,
+    discount_percentage DECIMAL(5,2) NOT NULL,
+    new_premium DECIMAL(10,2) NOT NULL,
+    coverage_tier INTEGER NOT NULL,
+    oracle_tx_hash VARCHAR(66),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+```
+
+**Module 5: Oracle Service**
+
+**Purpose**: Background service that reads health scores and updates blockchain
+
+**Service Logic**:
+```typescript
+// Cron job runs every 24 hours
+async function oracleUpdateJob() {
+    const policies = await getActivePolicies();
+    
+    for (const policy of policies) {
+        try {
+            // 1. Get latest health score for user
+            const latestScore = await getLatestHealthScore(policy.user_id);
+            
+            if (!latestScore || !shouldUpdate(policy.last_oracle_update)) {
+                continue;
+            }
+            
+            // 2. Sign the data
+            const message = ethers.solidityPackedKeccak256(
+                ['uint256', 'uint256', 'uint256'],
+                [policy.token_id, latestScore.overall_score, Date.now()]
+            );
+            const signature = await oracleWallet.signMessage(ethers.getBytes(message));
+            
+            // 3. Submit to blockchain
+            const tx = await oracleContract.fulfillHealthUpdate(
+                policy.token_id,
+                latestScore.overall_score,
+                signature
+            );
+            
+            await tx.wait();
+            
+            // 4. Log the update
+            await logPolicyUpdate(policy.id, latestScore, tx.hash);
+            
+            console.log(`Updated policy ${policy.policy_number}: score ${latestScore.overall_score}`);
+            
+        } catch (error) {
+            console.error(`Failed to update policy ${policy.policy_number}:`, error);
+            await logOracleError(policy.id, error);
+        }
+        
+        // Rate limit: wait between transactions
+        await sleep(5000);
+    }
+}
+
+function shouldUpdate(lastUpdate: Date): boolean {
+    const hoursSinceUpdate = (Date.now() - lastUpdate.getTime()) / (1000 * 60 * 60);
+    return hoursSinceUpdate >= 24;
+}
+```
+
+**Module 6: Admin Dashboard API**
+
+**Endpoints**:
+```
+GET    /api/admin/policies           - Get all policies (paginated, filtered)
+GET    /api/admin/analytics          - Get platform analytics
+GET    /api/admin/users              - Get all users
+POST   /api/admin/policies/:id/approve - Approve policy application
+POST   /api/admin/policies/:id/reject  - Reject policy application
+PUT    /api/admin/scoring-weights    - Update health score weights
+GET    /api/admin/oracle-logs        - Get oracle update logs
+GET    /api/admin/claims             - Get all claims
+POST   /api/admin/claims/:id/process - Process insurance claim
+```
+
+### 3. Frontend Application Specifications
+
+#### Application Structure
+
+```
+src/
+├── app/
+│   ├── layout.tsx                 # Root layout with Web3 providers
+│   ├── page.tsx                   # Landing page
+│   ├── dashboard/
+│   │   ├── page.tsx               # Dashboard home
+│   │   ├── health/page.tsx        # Health metrics view
+│   │   ├── policy/page.tsx        # Policy details
+│   │   ├── wearables/page.tsx     # Connect wearables
+│   │   └── settings/page.tsx      # User settings
+│   ├── admin/
+│   │   ├── page.tsx               # Admin dashboard
+│   │   ├── policies/page.tsx      # Manage policies
+│   │   ├── analytics/page.tsx     # Platform analytics
+│   │   └── settings/page.tsx      # System settings
+│   └── api/                       # API routes (if using Next.js API)
+├── components/
+│   ├── ui/                        # shadcn/ui components
+│   ├── dashboard/
+│   │   ├── HealthMetricsChart.tsx
+│   │   ├── PolicyCard.tsx
+│   │   ├── WearableConnectionCard.tsx
+│   │   ├── HealthScoreGauge.tsx
+│   │   └── ActivityCalendar.tsx
+│   ├── web3/
+│   │   ├── ConnectWallet.tsx
+│   │   ├── NetworkSwitcher.tsx
+│   │   └── TransactionStatus.tsx
+│   └── layout/
+│       ├── Navbar.tsx
+│       ├── Sidebar.tsx
+│       └── Footer.tsx
+├── hooks/
+│   ├── useAuth.ts
+│   ├── useWallet.ts
+│   ├── useHealthData.ts
+│   ├── usePolicyNFT.ts
+│   └── useWearables.ts
+├── lib/
+│   ├── api.ts                     # API client
+│   ├── contracts.ts               # Contract ABIs and addresses
+│   ├── utils.ts                   # Helper functions
+│   └── constants.ts               # App constants
+├── store/
+│   └── store.ts                   # Zustand store
+└── types/
+    └── index.ts                   # TypeScript types
+```
+
+#### Key Frontend Components
+
+**Component 1: Dashboard Home**
+
+Features:
+- Health score visualization (circular gauge)
+- Quick stats cards (steps today, active minutes, sleep hours)
+- Policy summary card (current premium, discount, tier)
+- Recent activity feed
+- Action buttons (sync wearable, view detailed metrics)
+
+**Component 2: Health Metrics Page**
+
+Features:
+- Date range selector
+- Interactive charts for each metric:
+  - Line chart: Health score over time
+  - Bar chart: Daily steps
+  - Area chart: Sleep pattern
+  - Line chart: Heart rate trend
+- Metric comparison table
+- Export data button (CSV/PDF)
+- Goal progress indicators
+
+**Component 3: Wearable Connection Page**
+
+Features:
+- Cards for each wearable provider (Fitbit, Google Fit, Apple Health)
+- Connection status indicator (connected/disconnected)
+- Connect button → OAuth flow
+- Last sync timestamp
+- Manual sync button
+- Disconnect button
+- Data permissions display
+
+**UI Flow**:
+```typescript
+// Example OAuth flow
+async function connectFitbit() {
+    setLoading(true);
+    try {
+        // 1. Get OAuth URL from backend
+        const { authUrl } = await api.get('/api/wearables/auth-url/fitbit');
+        
+        // 2. Open OAuth window
+        const width = 500;
+        const height = 600;
+        const left = window.screenX + (window.outerWidth - width) / 2;
+        const top = window.screenY + (window.outerHeight - height) / 2;
+        
+        const popup = window.open(
+            authUrl,
+            'Fitbit OAuth',
+            `width=${width},height=${height},left=${left},top=${top}`
+        );
+        
+        // 3. Listen for callback
+        const handleCallback = async (event: MessageEvent) => {
+            if (event.data.type === 'oauth_success') {
+                window.removeEventListener('message', handleCallback);
+                popup?.close();
+                
+                // Fetch updated connections
+                await refetchConnections();
+                toast.success('Fitbit connected successfully!');
+            }
+        };
+        
+        window.addEventListener('message', handleCallback);
+        
+    } catch (error) {
+        toast.error('Failed to connect Fitbit');
+        console.error(error);
+    } finally {
+        setLoading(false);
+    }
+}
+```
+
+**Component 4: Policy NFT Viewer**
+
+Features:
+- 3D NFT visualization (optional, using Three.js)
+- Policy details display:
+  - Policy number
+  - Token ID
+  - Coverage amount
+  - Coverage tier (Bronze/Silver/Gold/Platinum badge)
+  - Base premium
+  - Current health score
+  - Discount percentage
+  - Discounted premium
+  - Next update date
+- Transaction history table
+- View on blockchain explorer button
+- Transfer policy button (transfer NFT)
+- Download policy document (from IPFS)
+
+**Component 5: Wallet Connection**
+
+```typescript
+// Using wagmi hooks
+import { useAccount, useConnect, useDisconnect } from 'wagmi';
+
+function ConnectWallet() {
+    const { address, isConnected } = useAccount();
+    const { connect, connectors } = useConnect();
+    const { disconnect } = useDisconnect();
+    
+    if (isConnected) {
+        return (
+            <div className="flex items-center gap-2">
+                <span className="text-sm">{formatAddress(address)}</span>
+                <Button onClick={() => disconnect()}>Disconnect</Button>
+            </div>
+        );
+    }
+    
+    return (
+        <div className="flex flex-col gap-2">
+            {connectors.map((connector) => (
+                <Button
+                    key={connector.id}
+                    onClick={() => connect({ connector })}
+                >
+                    Connect {connector.name}
+                </Button>
+            ))}
+        </div>
+    );
+}
+```
+
+**Component 6: Admin Analytics Dashboard**
+
+Features:
+- KPI cards:
+  - Total policies
+  - Active users
+  - Average health score
+  - Total premiums collected
+  - Discount given out
+- Charts:
+  - Line chart: Policies over time
+  - Pie chart: Coverage tier distribution
+  - Bar chart: Health score distribution
+  - Area chart: Premium revenue over time
+- Recent policy applications table
+- Oracle update logs
+- System health indicators
+
+#### State Management Structure
+
+```typescript
+// Zustand store
+interface AppState {
+    // Auth
+    user: User | null;
+    token: string | null;
+    login: (email: string, password: string) => Promise<void>;
+    logout: () => void;
+    
+    // Wearables
+    connectedWearables: WearableConnection[];
+    syncWearable: (provider: string) => Promise<void>;
+    
+    // Health data
+    healthMetrics: HealthMetric[];
+    currentHealthScore: number;
+    fetchHealthData: (startDate: Date, endDate: Date) => Promise<void>;
+    
+    // Policy
+    policies: Policy[];
+    selectedPolicy: Policy | null;
+    fetchPolicies: () => Promise<void>;
+    mintPolicy: (policyId: string) => Promise<void>;
+}
+```
+
+### 4. Security & Privacy Implementation
+
+#### Data Encryption
+
+**At Rest**:
+```typescript
+// Encrypt sensitive data before storing in database
+import crypto from 'crypto';
+
+const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY!; // 32 bytes
+const ALGORITHM = 'aes-256-gcm';
+
+function encrypt(text: string): { encrypted: string; iv: string; authTag: string } {
+    const iv = crypto.randomBytes(16);
+    const cipher = crypto.createCipheriv(ALGORITHM, Buffer.from(ENCRYPTION_KEY, 'hex'), iv);
+    
+    let encrypted = cipher.update(text, 'utf8', 'hex');
+    encrypted += cipher.final('hex');
+    
+    const authTag = cipher.getAuthTag();
+    
+    return {
+        encrypted,
+        iv: iv.toString('hex'),
+        authTag: authTag.toString('hex')
+    };
+}
+
+function decrypt(encrypted: string, iv: string, authTag: string): string {
+    const decipher = crypto.createDecipheriv(
+        ALGORITHM,
+        Buffer.from(ENCRYPTION_KEY, 'hex'),
+        Buffer.from(iv, 'hex')
+    );
+    
+    decipher.setAuthTag(Buffer.from(authTag, 'hex'));
+    
+    let decrypted = decipher.update(encrypted, 'hex', 'utf8');
+    decrypted += decipher.final('utf8');
+    
+    return decrypted;
+}
+
+// Usage
+const token = await getWearableToken(userId);
+const { encrypted, iv, authTag } = encrypt(token);
+await db.wearableConnections.update({
+    where: { id },
+    data: { access_token: encrypted, iv, auth_tag: authTag }
+});
+```
+
+**In Transit**:
+- Enforce HTTPS/TLS 1.3 for all API endpoints
+- Use secure WebSocket connections (WSS) for real-time updates
+- Certificate pinning in mobile apps
+
+#### GDPR/HIPAA Compliance Features
+
+**Consent Management**:
+```typescript
+interface ConsentRecord {
+    userId: string;
+    consentType: 'data_collection' | 'data_sharing' | 'marketing' | 'research';
+    granted: boolean;
+    timestamp: Date;
+    ipAddress: string;
+    userAgent: string;
+}
+
+// Log all consent changes
+async function updateConsent(userId: string, consentType: string, granted: boolean) {
+    await db.consents.create({
+        data: {
+            user_id: userId,
+            consent_type: consentType,
+            granted,
+            ip_address: req.ip,
+            user_agent: req.headers['user-agent'],
+            timestamp: new Date()
+        }
+    });
+}
+```
+
+**Right to be Forgotten**:
+```typescript
+async function deleteUserData(userId: string) {
+    // 1. Delete personal data from database
+    await db.healthMetrics.deleteMany({ where: { user_id: userId } });
+    await db.healthScores.deleteMany({ where: { user_id: userId } });
+    await db.wearableConnections.deleteMany({ where: { user_id: userId } });
+    
+    // 2. Anonymize policy records (keep for audit but remove PII)
+    await db.insurancePolicies.updateMany({
+        where: { user_id: userId },
+        data: {
+            user_id: 'DELETED_USER',
+            status: 'cancelled'
+        }
+    });
+    
+    // 3. Revoke blockchain policy (if applicable)
+    const policies = await getUserPolicies(userId);
+    for (const policy of policies) {
+        if (policy.token_id) {
+            await revokeNFTPolicy(policy.token_id);
+        }
+    }
+    
+    // 4. Delete user account
+    await db.users.delete({ where: { id: userId } });
+    
+    // 5. Log deletion for audit
+    await logDataDeletion(userId);
+}
+```
+
+**Data Access Logging**:
+```typescript
+// Middleware to log all health data access
+async function auditLogMiddleware(req: Request, res: Response, next: NextFunction) {
+    const sensitiveRoutes = ['/api/health', '/api/policies'];
+    
+    if (sensitiveRoutes.some(route => req.path.startsWith(route))) {
+        await db.auditLogs.create({
+            data: {
+                user_id: req.user.id,
+                action: req.method,
+                resource: req.path,
+                ip_address: req.ip,
+                timestamp: new Date(),
+                success: true // Updated after response
+            }
+        });
+    }
+    
+    next();
+}
+```
+
+### 5. Testing Strategy
+
+#### Smart Contract Tests (Hardhat)
+
+```typescript
+// test/HealthInsuranceNFT.test.ts
+import { expect } from "chai";
+import { ethers } from "hardhat";
+
+describe("HealthInsuranceNFT", function () {
+    let nftContract: any;
+    let owner: any, oracle: any, user: any;
+    
+    beforeEach(async function () {
+        [owner, oracle, user] = await ethers.getSigners();
+        
+        const HealthInsuranceNFT = await ethers.getContractFactory("HealthInsuranceNFT");
+        nftContract = await HealthInsuranceNFT.deploy();
+        await nftContract.waitForDeployment();
+        
+        // Add oracle
+        await nftContract.addOracle(oracle.address);
+    });
+    
+    describe("Minting", function () {
+        it("Should mint a new policy NFT", async function () {
+            const basePremium = ethers.parseEther("0.1");
+            const ipfsHash = "QmTest123";
+            
+            await expect(nftContract.mintPolicy(user.address, basePremium, ipfsHash))
+                .to.emit(nftContract, "PolicyMinted")
+                .withArgs(1, user.address, basePremium);
+            
+            expect(await nftContract.ownerOf(1)).to.equal(user.address);
+            
+            const policy = await nftContract.policies(1);
+            expect(policy.basePremium).to.equal(basePremium);
+            expect(policy.healthScore).to.equal(0); // Initial score
+            expect(policy.isActive).to.be.true;
+        });
+        
+        it("Should not allow non-owner to mint", async function () {
+            await expect(
+                nftContract.connect(user).mintPolicy(user.address, ethers.parseEther("0.1"), "hash")
+            ).to.be.reverted;
+        });
+    });
+    
+    describe("Health Score Updates", function () {
+        beforeEach(async function () {
+            await nftContract.mintPolicy(user.address, ethers.parseEther("0.1"), "hash");
+        });
+        
+        it("Should update health score via oracle", async function () {
+            const newScore = 85;
+            
+            await expect(nftContract.connect(oracle).updateHealthScore(1, newScore))
+                .to.emit(nftContract, "HealthScoreUpdated")
+                .withArgs(1, 0, newScore);
+            
+            const policy = await nftContract.policies(1);
+            expect(policy.healthScore).to.equal(newScore);
+        });
+        
+        it("Should not allow non-oracle to update health score", async function () {
+            await expect(
+                nftContract.connect(user).updateHealthScore(1, 85)
+            ).to.be.revertedWith("Not authorized oracle");
+        });
+        
+        it("Should enforce rate limit on updates", async function () {
+            await nftContract.connect(oracle).updateHealthScore(1, 85);
+            
+            // Try to update again immediately
+            await expect(
+                nftContract.connect(oracle).updateHealthScore(1, 90)
+            ).to.be.revertedWith("Update too frequent");
+        });
+    });
+    
+    describe("Premium Calculations", function () {
+        it("Should calculate correct discount for high health score", async function () {
+            await nftContract.mintPolicy(user.address, ethers.parseEther("1.0"), "hash");
+            await nftContract.connect(oracle).updateHealthScore(1, 90);
+            
+            const currentPremium = await nftContract.getCurrentPremium(1);
+            // 90+ score = 20% discount
+            expect(currentPremium).to.equal(ethers.parseEther("0.8"));
+        });
+        
+        it("Should calculate no discount for low health score", async function () {
+            await nftContract.mintPolicy(user.address, ethers.parseEther("1.0"), "hash");
+            await nftContract.connect(oracle).updateHealthScore(1, 40);
+            
+            const currentPremium = await nftContract.getCurrentPremium(1);
+            expect(currentPremium).to.equal(ethers.parseEther("1.0"));
+        });
+    });
+    
+    describe("Gas Optimization", function () {
+        it("Should use reasonable gas for minting", async function () {
+            const tx = await nftContract.mintPolicy(
+                user.address,
+                ethers.parseEther("0.1"),
+                "hash"
+            );
+            const receipt = await tx.wait();
+            
+            console.log(`Mint gas used: ${receipt.gasUsed.toString()}`);
+            expect(receipt.gasUsed).to.be.lessThan(200000); // Set reasonable limit
+        });
+    });
+});
+```
+
+#### Backend API Tests (Jest + Supertest)
+
+```typescript
+// tests/api/health.test.ts
+import request from 'supertest';
+import app from '../src/app';
+import { db } from '../src/lib/db';
+
+describe('Health API', () => {
+    let authToken: string;
+    let userId: string;
+    
+    beforeAll(async () => {
+        // Setup test user
+        const res = await request(app)
+            .post('/api/auth/register')
+            .send({
+                email: 'test@example.com',
+                password: 'Test123!@#',
+                firstName: 'Test',
+                lastName: 'User'
+            });
+        
+        authToken = res.body.token;
+        userId = res.body.user.id;
+    });
+    
+    afterAll(async () => {
+        await db.users.delete({ where: { id: userId } });
+    });
+    
+    describe('GET /api/health/score', () => {
+        it('should return current health score', async () => {
+            // Insert test data
+            await db.healthScores.create({
+                data: {
+                    user_id: userId,
+                    score_date: new Date(),
+                    overall_score: 85,
+                    steps_score: 90,
+                    activity_score: 80,
+                    sleep_score: 85,
+                    heart_score: 85
+                }
+            });
+            
+            const res = await request(app)
+                .get('/api/health/score')
+                .set('Authorization', `Bearer ${authToken}`);
+            
+            expect(res.status).toBe(200);
+            expect(res.body.overall_score).toBe(85);
+            expect(res.body).toHaveProperty('steps_score');
+        });
+        
+        it('should return 401 without auth token', async () => {
+            const res = await request(app).get('/api/health/score');
+            expect(res.status).toBe(401);
+        });
+    });
+    
+    describe('POST /api/health/metrics', () => {
+        it('should store health metrics', async () => {
+            const metrics = {
+                metricDate: '2024-01-15',
+                steps: 10000,
+                activeMinutes: 45,
+                sleepHours: 7.5,
+                restingHeartRate: 65
+            };
+            
+            const res = await request(app)
+                .post('/api/health/metrics')
+                .set('Authorization', `Bearer ${authToken}`)
+                .send(metrics);
+            
+            expect(res.status).toBe(201);
+            expect(res.body.steps).toBe(10000);
+            
+            // Verify in database
+            const stored = await db.healthMetrics.findFirst({
+                where: {
+                    user_id: userId,
+                    metric_date: new Date('2024-01-15')
+                }
+            });
+            
+            expect(stored).toBeTruthy();
+            expect(stored?.steps).toBe(10000);
+        });
+    });
+});
+```
+
+#### Frontend Component Tests (Jest + React Testing Library)
+
+```typescript
+// components/__tests__/HealthScoreGauge.test.tsx
+import { render, screen } from '@testing-library/react';
+import HealthScoreGauge from '../HealthScoreGauge';
+
+describe('HealthScoreGauge', () => {
+    it('renders health score correctly', () => {
+        render(<HealthScoreGauge score={85} />);
+        
+        expect(screen.getByText('85')).toBeInTheDocument();
+        expect(screen.getByText('Health Score')).toBeInTheDocument();
+    });
+    
+    it('applies correct color for high score', () => {
+        const { container } = render(<HealthScoreGauge score={90} />);
+        const gauge = container.querySelector('.gauge-fill');
+        
+        expect(gauge).toHaveClass('bg-green-500');
+    });
+    
+    it('applies correct color for medium score', () => {
+        const { container } = render(<HealthScoreGauge score={65} />);
+        const gauge = container.querySelector('.gauge-fill');
+        
+        expect(gauge).toHaveClass('bg-yellow-500');
+    });
+    
+    it('applies correct color for low score', () => {
+        const { container } = render(<HealthScoreGauge score={40} />);
+        const gauge = container.querySelector('.gauge-fill');
+        
+        expect(gauge).toHaveClass('bg-red-500');
+    });
+});
+```
+
+#### E2E Tests (Playwright)
+
+```typescript
+// e2e/user-journey.spec.ts
+import { test, expect } from '@playwright/test';
+
+test.describe('Complete User Journey', () => {
+    test('user can register, connect wearable, and view policy', async ({ page, context }) => {
+        // 1. Register
+        await page.goto('http://localhost:3000/register');
+        await page.fill('input[name="email"]', 'e2e@example.com');
+        await page.fill('input[name="password"]', 'Test123!@#');
+        await page.fill('input[name="firstName"]', 'E2E');
+        await page.fill('input[name="lastName"]', 'Test');
+        await page.click('button[type="submit"]');
+        
+        await expect(page).toHaveURL('/dashboard');
+        
+        // 2. Connect wallet
+        await page.click('button:has-text("Connect Wallet")');
+        // Mock MetaMask interaction
+        // (requires browser extension or mock)
+        
+        // 3. Connect wearable
+        await page.goto('/dashboard/wearables');
+        await page.click('button:has-text("Connect Fitbit")');
+        
+        // Handle OAuth popup
+        const popupPromise = page.waitForEvent('popup');
+        const popup = await popupPromise;
+        
+        // Mock OAuth flow
+        await popup.fill('input[name="email"]', 'fitbit@example.com');
+        await popup.fill('input[name="password"]', 'fitbitpass');
+        await popup.click('button:has-text("Authorize")');
+        
+        await page.waitForSelector('text=Fitbit connected');
+        
+        // 4. View health metrics
+        await page.goto('/dashboard/health');
+        await expect(page.locator('text=Health Score')).toBeVisible();
+        await expect(page.locator('text=Steps Today')).toBeVisible();
+        
+        // 5. Apply for policy
+        await page.goto('/dashboard/policy');
+        await page.click('button:has-text("Apply for Policy")');
+        await page.selectOption('select[name="coverageTier"]', 'silver');
+        await page.fill('input[name="coverageAmount"]', '100000');
+        await page.click('button[type="submit"]');
+        
+        await expect(page.locator('text=Application submitted')).toBeVisible();
+        
+        // 6. Mint NFT (after approval)
+        // Mock admin approval step
+        await page.goto('/dashboard/policy');
+        await page.click('button:has-text("Mint Policy NFT")');
+        
+        // Wait for blockchain transaction
+        await page.waitForSelector('text=Minting in progress', { timeout: 5000 });
+        await page.waitForSelector('text=Policy minted successfully', { timeout: 30000 });
+        
+        // 7. View NFT
+        await expect(page.locator('text=Token ID')).toBeVisible();
+        await expect(page.locator('text=Coverage Tier')).toBeVisible();
+    });
+});
+```
+
+### 6. Deployment Guide
+
+#### Environment Variables
+
+```bash
+# .env.example
+
+# Database
+DATABASE_URL=postgresql://user:password@localhost:5432/healthchain
+REDIS_URL=redis://localhost:6379
+
+# JWT
+JWT_SECRET=your-super-secret-jwt-key-min-32-chars
+JWT_EXPIRY=7d
+
+# Encryption
+ENCRYPTION_KEY=64-character-hex-string-for-aes-256
+
+# Blockchain
+BLOCKCHAIN_RPC_URL=https://polygon-mumbai.infura.io/v3/YOUR_API_KEY
+PRIVATE_KEY=your-oracle-wallet-private-key
+NFT_CONTRACT_ADDRESS=0x...
+ORACLE_CONTRACT_ADDRESS=0x...
+CHAIN_ID=80001
+
+# Wearables
+FITBIT_CLIENT_ID=your-fitbit-client-id
+FITBIT_CLIENT_SECRET=your-fitbit-client-secret
+FITBIT_REDIRECT_URI=http://localhost:3001/api/wearables/callback/fitbit
+
+GOOGLE_FIT_CLIENT_ID=your-google-fit-client-id
+GOOGLE_FIT_CLIENT_SECRET=your-google-fit-client-secret
+GOOGLE_FIT_REDIRECT_URI=http://localhost:3001/api/wearables/callback/google_fit
+
+# Frontend
+NEXT_PUBLIC_API_URL=http://localhost:3001/api
+NEXT_PUBLIC_CHAIN_ID=80001
+NEXT_PUBLIC_NFT_CONTRACT_ADDRESS=0x...
+
+# IPFS (for policy documents)
+IPFS_API_URL=https://ipfs.infura.io:5001
+IPFS_PROJECT_ID=your-infura-ipfs-project-id
+IPFS_PROJECT_SECRET=your-infura-ipfs-secret
+
+# Monitoring
+SENTRY_DSN=https://...@sentry.io/...
+LOG_LEVEL=info
+```
+
+#### Docker Compose Setup
+
+```yaml
+# docker-compose.yml
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: healthchain
+      POSTGRES_USER: healthchain
+      POSTGRES_PASSWORD: secure_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+      
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://healthchain:secure_password@postgres:5432/healthchain
+      - REDIS_URL=redis://redis:6379
+    env_file:
+      - ./backend/.env
+    ports:
+      - "3001:3001"
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - ./backend/logs:/app/logs
+      
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    environment:
+      - NEXT_PUBLIC_API_URL=http://backend:3001/api
+    env_file:
+      - ./frontend/.env
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+      
+  oracle-service:
+    build:
+      context: ./oracle-service
+      dockerfile: Dockerfile
+    env_file:
+      - ./oracle-service/.env
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
+```
+
+#### Deployment Steps
+
+**Step 1: Deploy Smart Contracts**
+
+```bash
+# Deploy to testnet
+cd blockchain
+npx hardhat run scripts/deploy.ts --network polygonMumbai
+
+# Verify on Polygonscan
+npx hardhat verify --network polygonMumbai DEPLOYED_CONTRACT_ADDRESS
+
+# Update .env with contract addresses
+```
+
+**Step 2: Setup Database**
+
+```bash
+cd backend
+npm run migrate # Run Prisma migrations
+npm run seed # Optional: seed initial data
+```
+
+**Step 3: Deploy Backend**
+
+```bash
+# Using Railway/Render
+railway up
+# or
+render deploy
+
+# Or using Docker
+docker-compose up -d backend
+```
+
+**Step 4: Deploy Frontend**
+
+```bash
+# Using Vercel
+cd frontend
+vercel --prod
+
+# Or build and deploy to any host
+npm run build
+# Upload ./out directory to hosting
+```
+
+**Step 5: Start Oracle Service**
+
+```bash
+# Using PM2
+cd oracle-service
+pm2 start dist/index.js --name healthchain-oracle
+
+# Or using Docker
+docker-compose up -d oracle-service
+```
+
+### 7. Development Best Practices
+
+#### Code Style Guidelines
+
+- Use TypeScript for type safety
+- Follow Airbnb style guide for JavaScript/TypeScript
+- Use ESLint + Prettier for code formatting
+- Write descriptive commit messages (conventional commits)
+- Use meaningful variable and function names
+- Add JSDoc comments for complex functions
+- Keep functions small and single-purpose
+
+#### Git Workflow
+
+```bash
+# Branch naming
+feature/add-wearable-integration
+fix/health-score-calculation-bug
+hotfix/oracle-update-failure
+
+# Commit message format
+feat: add Fitbit integration
+fix: correct health score calculation for seniors
+docs: update API documentation for policy endpoints
+test: add unit tests for premium calculation
+```
+
+#### Security Checklist
+
+- [ ] All API endpoints have authentication
+- [ ] Input validation on all user inputs
+- [ ] SQL injection prevention (use parameterized queries/ORM)
+- [ ] XSS prevention (sanitize outputs)
+- [ ] CSRF tokens for state-changing operations
+- [ ] Rate limiting on all public endpoints
+- [ ] Secure password hashing (bcrypt with salt)
+- [ ] Encrypted sensitive data at rest
+- [ ] HTTPS/TLS enforced
+- [ ] Security headers (helmet.js)
+- [ ] Regular dependency updates
+- [ ] Smart contract audits (manual review + tools like Slither)
+- [ ] Private key management (never commit to repo)
+- [ ] Environment variables for all secrets
+
+### 8. Presentation & Documentation
+
+#### Project Report Structure
+
+1. **Abstract** (200 words)
+2. **Introduction** (2-3 pages)
+   - Background
+   - Problem statement
+   - Objectives
+   - Scope
+3. **Literature Review** (5-7 pages)
+   - Blockchain technology
+   - NFTs and their applications
+   - Health insurance industry challenges
+   - Wearable technology
+   - Related work
+4. **System Design** (8-10 pages)
+   - Requirements analysis
+   - System architecture diagram
+   - Component design
+   - Database schema
+   - Smart contract design
+   - Security design
+5. **Implementation** (10-12 pages)
+   - Technology stack justification
+   - Module-wise implementation
+   - Code snippets with explanations
+   - Challenges and solutions
+6. **Testing & Results** (5-7 pages)
+   - Test cases
+   - Test results
+   - Performance metrics
+   - User feedback (if applicable)
+7. **Conclusion & Future Work** (2-3 pages)
+8. **References**
+9. **Appendices**
+   - User manual
+   - API documentation
+   - Smart contract code
+
+#### Demo Scenario
+
+1. **User Registration** (1 min)
+   - Show registration form
+   - Create account
+   - Connect wallet
+
+2. **Wearable Integration** (2 min)
+   - Connect Fitbit via OAuth
+   - Show data syncing
+   - Display health metrics
+
+3. **Health Score** (1 min)
+   - Explain calculation algorithm
+   - Show historical trends
+   - Highlight improvements
+
+4. **Policy Application** (2 min)
+   - Fill application form
+   - Show admin approval process
+   - Mint NFT
+
+5. **Dynamic Updates** (2 min)
+   - Trigger oracle update (or show scheduled update)
+   - Display updated health score
+   - Show new premium calculation
+   - Demonstrate discount applied
+
+6. **Admin Dashboard** (1 min)
+   - Show platform analytics
+   - Display all policies
+   - View oracle logs
+
+7. **Blockchain Verification** (1 min)
+   - Show NFT on blockchain explorer
+   - Display transaction history
+   - Prove immutability
+
+### 9. Additional Features for Bonus Points
+
+#### Feature 1: Predictive Analytics
+
+```typescript
+// Simple ML model to predict future health trends
+interface HealthPrediction {
+    predictedScore: number;
+    confidence: number;
+    recommendation: string;
+}
+
+async function predictFutureHealth(userId: string, daysAhead: number): Promise<HealthPrediction> {
+    // Get historical data
+    const history = await getHealthScoreHistory(userId, 90); // Last 90 days
+    
+    // Simple linear regression
+    const trend = calculateTrend(history);
+    const predictedScore = Math.max(0, Math.min(100, 
+        history[history.length - 1].score + (trend * daysAhead)
+    ));
+    
+    const confidence = calculateConfidence(history);
+    
+    return {
+        predictedScore: Math.round(predictedScore),
+        confidence: Math.round(confidence * 100),
+        recommendation: generateRecommendation(predictedScore, trend)
+    };
+}
+```
+
+#### Feature 2: Social Challenges
+
+- Users can create/join health challenges
+- Compete with friends (anonymized)
+- Earn achievement badges (NFTs)
+- Leaderboards
+
+#### Feature 3: Telemedicine Integration
+
+- Video consultations
+- Chat with healthcare providers
+- Prescription management
+- Integrated with policy coverage
+
+#### Feature 4: Claims Processing
+
+- Submit claims with photos/documents
+- AI-powered claim validation
+- Smart contract automatic payout (small claims)
+- Claims history tracking
+
+---
+
+## General Instructions for Using This Prompt
+
+### When Starting Development
+
+1. **Set up project structure**: Ask for complete folder structure and initial configuration
+2. **Start with smart contracts**: Deploy and test contracts first
+3. **Build backend APIs**: Implement endpoints one module at a time
+4. **Develop frontend**: Build components incrementally
+5. **Integrate everything**: Connect all pieces together
+6. **Test thoroughly**: Write and run tests
+7. **Deploy**: Follow deployment steps
+8. **Document**: Write reports and documentation
+
+### When You Need Help
+
+Always provide context:
+- What you're trying to build
+- What you've tried
+- Any error messages
+- Relevant code snippets
+
+### Code Quality Checklist
+
+Before considering any feature complete:
+- [ ] Code is well-commented
+- [ ] Error handling is implemented
+- [ ] Input validation is present
+- [ ] Tests are written and passing
+- [ ] Security considerations are addressed
+- [ ] Performance is acceptable
+- [ ] Documentation is updated
+
+### Communication with Cursor/AI
+
+Be specific in your requests:
+- ❌ "Make a health score function"
+- ✅ "Create a TypeScript function that calculates health score from steps, active minutes, sleep hours, and heart rate. Use the weighted algorithm described in the specifications. Include input validation, error handling, and JSDoc comments."
+
+### Final Tips
+
+1. **Start small**: Build MVP first, add features later
+2. **Test early**: Don't wait until end to test
+3. **Version control**: Commit frequently with good messages
+4. **Ask questions**: Don't assume, clarify requirements
+5. **Focus on demo**: Make sure key features work flawlessly for presentation
+6. **Document as you go**: Don't leave documentation for last
+
+Good luck with your project! 🚀
