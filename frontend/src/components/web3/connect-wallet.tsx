@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Wallet, LogOut, Loader2, Copy, CheckCircle2 } from "lucide-react";
 import { useState } from "react";
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { toast } from "sonner";
 
 export function ConnectWallet({ onConnected }: { onConnected?: (address: string) => void }) {

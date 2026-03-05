@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { format } from "date-fns";
-import { Users, Eye, CheckCircle2, XCircle, Loader2, ArrowLeft, Heart, Activity } from "lucide-react";
+import { Users, Eye, CheckCircle2, XCircle, Loader2, ArrowLeft, Heart } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -16,7 +16,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "@/lib/api";
 import { toast } from "sonner";
-import { TIER_LABELS, STATUS_COLORS, type VendorApplication } from "@/types";
+import { STATUS_COLORS, type VendorApplication } from "@/types";
 import { cn } from "@/lib/utils";
 
 export default function VendorApplicationsPage() {
