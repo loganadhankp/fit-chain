@@ -37,11 +37,19 @@ export default function QuestionnairePage() {
   });
   const [newMedication, setNewMedication] = useState("");
 
-  const { data: existing, isLoading } = useQuery<{ questionnaire: HealthQuestionnaire }>({
+  const { data: existing, isLoading } = useQuery<{ questionnaire: HealthQuestionnaire | null }>({
     queryKey: ["questionnaire"],
     queryFn: async () => {
-      const { data } = await api.get("/questionnaire");
-      return data;
+      try {
+        const { data } = await api.get("/questionnaire");
+        return data;
+      } catch (err: unknown) {
+        const error = err as { response?: { status?: number } };
+        if (error.response?.status === 404) {
+          return { questionnaire: null };
+        }
+        throw err;
+      }
     },
     retry: false,
   });
