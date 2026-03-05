@@ -1,4 +1,6 @@
-FROM node:18-alpine AS builder
+FROM node:18-slim AS builder
+
+RUN apt-get update && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
@@ -11,7 +13,9 @@ RUN npx prisma generate
 COPY . .
 RUN npm run build
 
-FROM node:18-alpine
+FROM node:18-slim
+
+RUN apt-get update && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
