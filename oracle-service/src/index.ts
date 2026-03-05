@@ -182,7 +182,7 @@ function sleep(ms: number): Promise<void> {
 // --------------- Express endpoint for manual trigger ---------------
 
 const app = express();
-const PORT = process.env.ORACLE_PORT || 3002;
+const PORT = process.env.PORT || process.env.ORACLE_PORT || 3002;
 
 app.get("/health", (_req, res) => {
   res.json({ status: "ok", service: "oracle" });
