@@ -22,10 +22,10 @@ const config: HardhatUserConfig = {
     localhost: {
       url: "http://127.0.0.1:8545",
     },
-    polygonMumbai: {
+    polygonAmoy: {
       url: RPC_URL,
       accounts: [PRIVATE_KEY],
-      chainId: 80001,
+      chainId: 80002,
     },
     polygon: {
       url: process.env.POLYGON_RPC_URL || "",
