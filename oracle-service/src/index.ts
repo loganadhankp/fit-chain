@@ -1,5 +1,7 @@
 import dotenv from "dotenv";
-dotenv.config({ path: "../.env" });
+import path from "path";
+dotenv.config({ path: path.resolve(__dirname, "../../.env") });
+dotenv.config();
 
 import cron from "node-cron";
 import express from "express";

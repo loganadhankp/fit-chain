@@ -1,0 +1,98 @@
+databases:
+  - name: healthchain-postgres
+    plan: free
+    databaseName: healthchain
+    user: healthchain
+
+services:
+  # --- Backend API (Express.js) ---
+  - type: web
+    name: healthchain-backend
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: free
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: healthchain-postgres
+          property: connectionString
+      - key: REDIS_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_EXPIRY
+        value: 7d
+      - key: ENCRYPTION_KEY
+        sync: false
+      - key: PORT
+        value: 3001
+      - key: NODE_ENV
+        value: production
+      - key: CORS_ORIGIN
+        sync: false
+      - key: AI_SERVICE_URL
+        fromService:
+          name: healthchain-ai
+          type: web
+          property: hostport
+      - key: BLOCKCHAIN_RPC_URL
+        sync: false
+      - key: ORACLE_PRIVATE_KEY
+        sync: false
+      - key: NFT_CONTRACT_ADDRESS
+        sync: false
+      - key: CHAIN_ID
+        value: "80001"
+      - key: FITBIT_CLIENT_ID
+        sync: false
+      - key: FITBIT_CLIENT_SECRET
+        sync: false
+      - key: FITBIT_REDIRECT_URI
+        sync: false
+      - key: GOOGLE_FIT_CLIENT_ID
+        sync: false
+      - key: GOOGLE_FIT_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_FIT_REDIRECT_URI
+        sync: false
+      - key: IPFS_API_URL
+        sync: false
+      - key: IPFS_API_KEY
+        sync: false
+      - key: IPFS_API_SECRET
+        sync: false
+    healthCheckPath: /api/health-check
+
+  # --- AI Service (FastAPI / Python) ---
+  - type: web
+    name: healthchain-ai
+    runtime: docker
+    dockerfilePath: ./ai-service/Dockerfile
+    dockerContext: ./ai-service
+    plan: free
+    healthCheckPath: /health
+
+  # --- Oracle Service (Node.js cron) ---
+  - type: web
+    name: healthchain-oracle
+    runtime: docker
+    dockerfilePath: ./oracle-service/Dockerfile
+    dockerContext: ./oracle-service
+    plan: free
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: healthchain-postgres
+          property: connectionString
+      - key: BLOCKCHAIN_RPC_URL
+        sync: false
+      - key: ORACLE_PRIVATE_KEY
+        sync: false
+      - key: NFT_CONTRACT_ADDRESS
+        sync: false
+      - key: ORACLE_PORT
+        value: 3002
+      - key: NODE_ENV
+        value: production
+    healthCheckPath: /health

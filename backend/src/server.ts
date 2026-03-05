@@ -1,5 +1,7 @@
 import dotenv from "dotenv";
-dotenv.config({ path: "../.env" });
+import path from "path";
+dotenv.config({ path: path.resolve(__dirname, "../../.env") });
+dotenv.config(); // Also load from process env (for production)
 
 import express from "express";
 import cors from "cors";
@@ -22,7 +24,17 @@ const PORT = process.env.PORT || 3001;
 
 // --------------- Global middleware ---------------
 app.use(helmet());
-app.use(cors({ origin: process.env.CORS_ORIGIN || "http://localhost:3000", credentials: true }));
+const allowedOrigins = (process.env.CORS_ORIGIN || "http://localhost:3000").split(",");
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.some((o) => origin.startsWith(o.trim()))) {
+      callback(null, true);
+    } else {
+      callback(new Error("Not allowed by CORS"));
+    }
+  },
+  credentials: true,
+}));
 app.use(express.json({ limit: "10mb" }));
 app.use(morgan("dev"));
 
