@@ -11,6 +11,7 @@ const NFT_ABI = [
   "function policies(uint256) view returns (uint256 policyId, address policyHolder, uint256 basePremium, uint256 healthScore, uint256 discountPercentage, uint256 coverageTier, uint256 lastUpdated, bool isActive, string ipfsMetadataHash)",
   "function getCurrentPremium(uint256 _tokenId) view returns (uint256)",
   "function getUserPolicies(address _user) view returns (uint256[])",
+  "event PolicyMinted(uint256 indexed tokenId, address indexed holder, uint256 basePremium)",
 ];
 
 // --------------- Constants ---------------

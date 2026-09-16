@@ -53,3 +53,14 @@ redis_data/
 # Misc
 *.tsbuildinfo
 
+# Local embedded Postgres & data
+backend/.pgdata/
+*.pgdata
+verify_system.js
+
+# Python cache & venv
+__pycache__/
+*.pyc
+.venv/
+
+
